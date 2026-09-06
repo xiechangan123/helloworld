@@ -47,6 +47,7 @@ jobs:
             echo "- luci-app-ssr-plus"
             echo "- xray-core"
             echo "- mihomo"
+            echo "- naiveproxy"
           } > release_note.md
 
           echo "tag_name=${tag_name}" >> "$GITHUB_OUTPUT"
@@ -68,6 +69,10 @@ jobs:
         build_arch:
           - x64_ipk
           - x64_apk
+          - arm64_generic_ipk
+          - arm64_generic_apk
+          - arm64_a53_ipk
+          - arm64_a53_apk
 
     steps:
       - name: Install packages
@@ -151,6 +156,7 @@ jobs:
           CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ShadowsocksR_Libev_Server=n
           CONFIG_PACKAGE_xray-core=m
           CONFIG_PACKAGE_mihomo=m
+          CONFIG_PACKAGE_naiveproxy=m
           EOF
           make defconfig
           make clean
@@ -164,7 +170,7 @@ jobs:
           ./scripts/feeds install -a -p helloworld
           test -e package/feeds/helloworld/xray-core
 
-          packages=(luci-app-ssr-plus xray-core mihomo)
+          packages=(luci-app-ssr-plus xray-core mihomo naiveproxy)
           for package in "${packages[@]}"; do
             make "package/feeds/helloworld/${package}/clean"
             if ! make "package/feeds/helloworld/${package}/compile" -j"$(nproc)"; then
@@ -187,7 +193,17 @@ jobs:
             package_files+=("${matches[@]}")
           done
 
-          cp "${package_files[@]}" "$dist_dir"/
+          for package_file in "${package_files[@]}"; do
+            package_name="$(basename "$package_file")"
+            if [ "${PACKAGE_EXT}" = "apk" ]; then
+              case "$package_name" in
+                xray-core-*.apk|naiveproxy-*.apk)
+                  package_name="${package_name%.apk}_${SDK_ARCH}.apk"
+                  ;;
+              esac
+            fi
+            cp "$package_file" "$dist_dir/$package_name"
+          done
           cp "$package_dir"/Packages* "$dist_dir"/ 2>/dev/null || true
           cp "$package_dir"/APKINDEX* "$dist_dir"/ 2>/dev/null || true
 
